@@ -8,12 +8,10 @@ import pandas as pd
 from ase import Atom
 from ase.data import covalent_radii
 
-from rdkit.Chem import MolFromSmiles, Kekulize, AddHs, MolToSmiles, MolFromSmarts
-from rdkit.Chem import EditableMol, Kekulize, BondType, AddHs
-from rdkit.Chem import AdjustQueryParameters, AdjustQueryProperties, ADJUST_IGNOREDUMMIES
+from rdkit.Chem import EditableMol, BondType, AddHs, MolFromSmarts
 from rdkit.Chem import Atom as RdAtom
 
-from omdata.io_chain import Chain
+from omdata.io_chain import Chain, remove_bond_order, process_repeat_unit
 
 def get_chain_path_info(pdb_path, csv_dir):
     basename = os.path.basename(pdb_path)
@@ -64,14 +62,6 @@ def get_chain_path_info(pdb_path, csv_dir):
 
     return repeat_smiles, extra_smiles, polymer_class
 
-def remove_bond_order(query_mol):
-    for bond in query_mol.GetBonds():
-        bond.SetBondType(BondType.SINGLE)
-        bond.SetIsAromatic(False)
-        # Remove query constraints on bond order if any
-        bond.SetProp('bondType', '')  # just in case
-    return query_mol
-
 def trim_structure(chain, structure, bonds_breaking, cutoff):
     reacted_chain = Chain(structure, chain.repeat_units)
     react_mol = reacted_chain.rdkit_mol
@@ -106,7 +96,7 @@ def trim_structure(chain, structure, bonds_breaking, cutoff):
     clean_mol = remove_bond_order(AddHs(react_mol))
     for i in range(len(reacted_ends)):
         max_capped = False
-        all_mols = list(remove_bond_order(process_repeat_unit(smiles)) for smiles in all_smiles)
+        all_mols = list(process_repeat_unit(smiles) for smiles in all_smiles)
         current_idx = reacted_ends[i]
 
         stop_positions = [new_atoms[idx].position.copy() for idx in stop_indices]
@@ -261,28 +251,6 @@ def replace_stars(smiles):
     second_star_smiles = smiles[:star_indices[0]] + '[H]' + smiles[star_indices[0]+1:]
     
     return first_star_smiles, second_star_smiles
-
-def kekulize_smiles(smiles: str) -> str:
-    mol = MolFromSmiles(smiles)
-    if mol is None:
-        raise ValueError("Invalid SMILES")
-
-    Kekulize(mol, clearAromaticFlags=True)
-    mol = AddHs(mol)
-
-    # Write back to SMILES (non-aromatic)
-    return MolToSmiles(mol, kekuleSmiles=True)
-
-def process_repeat_unit(smiles):
-    smiles = kekulize_smiles(smiles)
-    qp = AdjustQueryParameters()
-    qp.makeDummiesQueries=True
-    qp.adjustDegree=True
-    qp.adjustDegreeFlags=ADJUST_IGNOREDUMMIES
-    m = (MolFromSmiles(smiles))
-
-    qm = AdjustQueryProperties(AddHs(m),qp)
-    return qm
 
 def reset_maps(new_atoms, clean_mol):
     rdkit_to_ase = {}  # key: rdkit_idx, value: ase_idx
