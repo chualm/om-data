@@ -3,6 +3,7 @@ import os
 import re
 import random
 import numpy as np
+import pandas as pd
 
 from ase import Atom
 from ase.data import covalent_radii
@@ -19,12 +20,20 @@ def get_chain_path_info(pdb_path, csv_dir):
     smiles_lists = {}
     
     # Load all necessary SMILES lists once
-    smiles_lists['Traditional'] = np.loadtxt(os.path.join(csv_dir, 'Traditional_polymers.csv'), dtype=str, comments=None)
-    smiles_lists['Fluoro'] = np.loadtxt(os.path.join(csv_dir, 'Fluoropolymers.csv'), dtype=str, comments=None)
-    smiles_lists['Electrolyte'] = np.loadtxt(os.path.join(csv_dir, 'Electrolytes.csv'), dtype=str, comments=None)
-    smiles_lists['A'] = np.loadtxt(os.path.join(csv_dir, 'A_optical_copolymers.csv'), dtype=str, comments=None)
-    smiles_lists['B'] = np.loadtxt(os.path.join(csv_dir, 'B_optical_copolymers.csv'), dtype=str, comments=None)
-    # smiles_lists['Chaos'] = np.loadtxt(os.path.join(csv_dir, 'Chaos_polymers.csv'), dtype=str, comments=None)
+    smiles_lists['Traditional'] = pd.read_csv(os.path.join(csv_dir, 'Traditional_polymers.csv'), header=None)[0]
+    smiles_lists['Fluoro'] = pd.read_csv(os.path.join(csv_dir, 'Fluoropolymers.csv'), header=None)[0]
+    smiles_lists['Electrolyte'] = pd.read_csv(os.path.join(csv_dir, 'Electrolytes.csv'), header=None)[0]
+    smiles_lists['A'] = pd.read_csv(os.path.join(csv_dir, 'A_optical_copolymers.csv'), header=None)[0]
+    smiles_lists['B'] = pd.read_csv(os.path.join(csv_dir, 'B_optical_copolymers.csv'), header=None)[0]
+    # smiles_lists['Chaos'] = pd.read_csv(os.path.join(csv_dir, 'all_monomers.csv'), header=None)[0]
+    
+    extra_smiles = []
+    if 'Solvent' in basename:
+        # no_other_numbers_Solvent_0000_MD_monomer000_no_other_numbers.pdb
+        solv_idx = int(re.search(r'Solvent_(\d+)', basename).group(1)) - 1 # 0-based indexing, assumes one solvent species
+        smiles_lists['extra'] = pd.read_csv(os.path.join(csv_dir, 'solvents.csv'))['smiles'].tolist()
+        extra_smiles.append(smiles_lists['extra'][solv_idx])
+        basename = re.sub(r'Solvent_\d+_', '', basename) # remove solvent number from name
 
     # Determine polymer class
     if 'Traditional' in pdb_path:
@@ -42,18 +51,18 @@ def get_chain_path_info(pdb_path, csv_dir):
 
     pattern = re.findall(r'([AB]?)(\d+)', basename)
 
-    smiles = []
+    repeat_smiles = []
     for prefix, number_str in pattern:
         idx = int(number_str) - 1  # 0-based indexing
         if prefix == 'A' or "atom_A" in pdb_path:
-            smiles.append(smiles_lists['A'][idx])
+            repeat_smiles.append(smiles_lists['A'][idx])
         elif prefix == 'B' or "atom_B" in pdb_path:
-            smiles.append(smiles_lists['B'][idx])
+            repeat_smiles.append(smiles_lists['B'][idx])
         else:
             # No prefix: use the current polymer class
-            smiles.append(smiles_lists[polymer_class][idx])
+            repeat_smiles.append(smiles_lists[polymer_class][idx])
 
-    return smiles, polymer_class
+    return repeat_smiles, extra_smiles, polymer_class
 
 def remove_bond_order(query_mol):
     for bond in query_mol.GetBonds():

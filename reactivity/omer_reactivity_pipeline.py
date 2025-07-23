@@ -155,7 +155,7 @@ def get_splits_for_protonation(pdb_files, csv_dir, logfile):
     return add_list, remove_list, none_list
 
 def process_one_pdb(pdb_path, csv_dir):
-    repeat_smiles, _ = get_chain_path_info(pdb_path, csv_dir)
+    repeat_smiles, extra_smiles, _ = get_chain_path_info(pdb_path, csv_dir)
     chain = Chain(pdb_path, repeat_smiles)
     all_bonds_to_break = get_bonds_to_break(chain, max_H_bonds=1, max_other_bonds=4)
     bond_to_break = random.choice(all_bonds_to_break)
@@ -176,7 +176,7 @@ def omer_react_pipeline(chain_dict, output_path, csv_dir):
     chain_path = chain_dict['path']
     chain = chain_dict['chain']
     bond_to_break = chain_dict['bond_to_break']
-    _, polymer_class = get_chain_path_info(chain_path, csv_dir)
+    _, _, polymer_class = get_chain_path_info(chain_path, csv_dir)
 
     name = polymer_class + "_" + chain_path.split("/")[-1][:-4]
 
