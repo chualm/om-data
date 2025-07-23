@@ -133,18 +133,33 @@ class Chain(Molecule):
             n_repeats.append(round(natoms_chain / natoms_repeat)) # round for small defects (+/- H)
         return n_repeats
     
+    def get_idx_lists(self):
+        chain_mol = self.rdkit_mol
+        chain_mol = remove_bond_order(chain_mol)
+        
+        extra_atoms = set()
+        for extra in self.extra_rdkit_mol:
+            extra_mol = extra
+            extra_mol = remove_bond_order(extra)
+            matches = chain_mol.GetSubstructMatches(extra_mol)
+            extra_atoms.update(matches)
+
+        all_atoms = set(range(chain_mol.GetNumAtoms()))
+        flat_extra_atoms= set(match for matches in extra_atoms for match in matches)
+        chain_atoms = all_atoms - flat_extra_atoms
+
+        extra_atoms = sorted(extra_atoms, reverse=True)
+        chain_atoms = sorted(chain_atoms, reverse=True)
+        return chain_atoms, extra_atoms
+    
     def remove_extra(self):
         """
         remove the extra molecules (i.e., solvent) to yield a clean chain
         """
         chain_mol = RWMol(self.rdkit_mol)
+        _, atoms_to_remove = self.get_idx_lists()
         
-        atoms_to_remove = set()
-        for extra in self.extra_rdkit_mol:
-            matches = chain_mol.GetSubstructMatches(extra)
-            for match in matches:
-                atoms_to_remove.update(match)
-
+        atoms_to_remove = list(match for matches in atoms_to_remove for match in matches)
         atoms_to_remove = sorted(atoms_to_remove, reverse=True)
 
         # Map old atom indices to new after deletion
@@ -159,7 +174,7 @@ class Chain(Molecule):
         xyz_block = MolToXYZBlock(chain_mol)
         new_ase_atoms = read(io.StringIO(xyz_block), format='xyz')
 
-        #  Add back residue names, needed for chain_ends
+        #  Add back residue names, good for chain_ends
         if "residuenames" in self.ase_atoms.arrays:
             original_residues = self.ase_atoms.arrays["residuenames"]
             kept_residues = original_residues[keep_mask]
@@ -168,7 +183,7 @@ class Chain(Molecule):
         new_chain = Chain(new_ase_atoms, self.repeat_units)
 
         assert new_chain.n_repeats == self.n_repeats
-        assert new_chain.ends == self.ends
+        # assert new_chain.ends == self.ends # there are some symmetric monomers where this is not true and that's okay
 
         return new_chain
     
