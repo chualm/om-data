@@ -9,7 +9,9 @@ from rdkit.Chem import MolFromMolBlock, MolToXYZBlock, AdjustQueryParameters, Ad
 
 from ase import Atom
 from ase.io import read, write
-from openbabel import pybel
+from ase.data import covalent_radii
+from ase.geometry import find_mic
+from openbabel import pybel, OBMol, OBConversion, OBMolBondIter
 from tempfile import NamedTemporaryFile
 
 class Chain(Molecule):
@@ -28,7 +30,36 @@ class Chain(Molecule):
     '''
     def __init__(self, structure, repeat_smiles, extra_smiles=[]):
         if ".pdb" in structure:
-            structure = read(structure)
+            ase_atoms = read(structure)
+            if "Solvent" in structure:
+                cell = ase_atoms.get_cell()
+                positions = ase_atoms.get_positions()
+
+                # load connectivity from PDB
+                obmol = OBMol()
+                conv = OBConversion()
+                conv.SetInFormat("pdb")
+                conv.ReadFile(obmol, structure)
+                for bond in OBMolBondIter(obmol):
+                    idx_1 = bond.GetBeginAtomIdx() - 1  # OpenBabel is 1-indexed
+                    idx_2 = bond.GetEndAtomIdx() - 1
+
+                    pos1 = positions[idx_1]
+                    pos2 = positions[idx_2]
+                    dr = pos2 - pos1
+                    dr_wrapped = find_mic(dr[np.newaxis, :], cell)[0]
+
+                    r1 = covalent_radii[ase_atoms[idx_1].number]
+                    r2 = covalent_radii[ase_atoms[idx_2].number]
+                    ideal_bond = r1 + r2
+
+                    if np.linalg.norm(dr) > 1.5 * ideal_bond:
+                        delta = np.squeeze(dr_wrapped) - dr
+                        positions[idx_2] += delta
+
+                ase_atoms.set_positions(positions)
+
+            structure = ase_atoms
         super().__init__(structure)
         
         self.repeat_units = repeat_smiles
