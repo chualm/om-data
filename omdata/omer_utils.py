@@ -504,3 +504,44 @@ def get_idealized_H_position(n_idx, chain_mol, conf, bond_length=1.01):
         unit_dir = direction / np.linalg.norm(direction)
         return atom_pos + bond_length * unit_dir
 
+def surround_chain_with_extra(chain, bond=None, remove=False, max_atoms=250):
+    from ase.geometry import find_mic
+    ase_atoms = chain.ase_atoms.copy()
+    positions, cell = ase_atoms.get_positions(), ase_atoms.get_cell()
+    chain_list, extra_list = chain.get_idx_lists()
+
+    ref_pos = positions[chain_list]
+    ref_com = np.mean(ref_pos, axis=0)
+    for idx_group in extra_list:
+        mol_pos = positions[list(idx_group)]
+        mol_com = np.mean(mol_pos, axis=0)
+
+        dr = mol_com - ref_com
+        dr_wrapped = find_mic(dr[np.newaxis, :], cell)[0]
+
+        dist_raw = np.linalg.norm(dr)
+        if dist_raw > 5.0:
+            translation = np.squeeze(dr_wrapped) - dr
+            for idx in idx_group:
+                positions[idx] += translation
+
+    ase_atoms.set_positions(positions)
+
+    if remove:
+        flat_extra_list = list(match for matches in extra_list for match in matches)
+        flat_extra_list = sorted(flat_extra_list, reverse=True)
+        sorted_solvent = sort_by_bond_distance(ase_atoms, bond, flat_extra_list)
+        keep_set = set(chain_list)
+        for idx in sorted_solvent:
+            if len(keep_set) >= max_atoms:
+                break
+            matching_groups = [group for group in extra_list if idx in group]
+
+            for group in matching_groups:
+                keep_set.update(group)
+        kept_indices = sorted(keep_set)
+        print(len(kept_indices))
+        ase_atoms = ase_atoms[kept_indices]
+    
+    return Chain(ase_atoms, chain.repeat_units, extra_smiles=chain.extra_units)
+
