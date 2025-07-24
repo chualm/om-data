@@ -73,11 +73,11 @@ def trim_structure(chain, structure, bonds_breaking, cutoff):
     broken_bonds = [idx for tup in reacted_bonds - initial_bonds for idx in tup]
     reacting_bonds = broken_bonds + formed_bonds
 
-    # if no bonds broken yet, still add bonds_breaking
+    # if no bonds broken yet, add bonds_breaking
     if any(bond not in reacting_bonds for bond in bonds_breaking):
         reacting_bonds += list(bonds_breaking)
 
-    stop_indices = []
+    stop_indices = [] # all indicies that should not be deleted
     for idx in reacting_bonds:
         if idx not in stop_indices: stop_indices.append(idx)
 
@@ -85,26 +85,30 @@ def trim_structure(chain, structure, bonds_breaking, cutoff):
         for s_idx in shielded:
             if s_idx not in stop_indices: stop_indices.append(s_idx)
 
+    # get pattern for substruct matching chain ends and flatten
     all_smiles = list(replace_stars(repeat_unit) for repeat_unit in chain.repeat_units)
     all_smiles = [s for pair in all_smiles for s in pair]
+    all_mols = list(process_repeat_unit(smiles) for smiles in all_smiles)
 
-    reacted_ends = sort_by_bond_distance(reacted_chain.ase_atoms, bonds_breaking, reacted_chain.ends)
+    # get atom mapping for rdkit and ase
     new_atoms = reacted_chain.ase_atoms
     rdkit_to_ase = {i: i for i in range(len(new_atoms))}
     ase_to_rdkit = {i: i for i in range(len(new_atoms))}
-
-    clean_mol = remove_bond_order(AddHs(react_mol))
+    
+    # iterate through chain ends, starting with those farthest from bonds_breaking
+    reacted_ends = sort_by_bond_distance(reacted_chain.ase_atoms, bonds_breaking, reacted_chain.ends)
     for i in range(len(reacted_ends)):
         max_capped = False
-        all_mols = list(process_repeat_unit(smiles) for smiles in all_smiles)
-        current_idx = reacted_ends[i]
-
         stop_positions = [new_atoms[idx].position.copy() for idx in stop_indices]
         end_positions = [new_atoms[idx].position.copy() if idx is not None else None
                             for idx in reacted_ends]
+        
+        current_idx = reacted_ends[i]
         if current_idx is None:
             # print("STOP: Chain end previously deleted")
             continue
+        
+        clean_mol = remove_bond_order(AddHs(react_mol))
         while not max_capped:    
             matches = list(clean_mol.GetSubstructMatches(mol) for mol in all_mols)       
             match = None
@@ -112,7 +116,7 @@ def trim_structure(chain, structure, bonds_breaking, cutoff):
 
             for mol, mol_matches in zip(all_mols, matches):
                 for m in mol_matches:
-                    if current_idx in m:
+                    if current_idx in m: # take first match found
                         match = m
                         match_mol = mol
                         break
@@ -129,17 +133,15 @@ def trim_structure(chain, structure, bonds_breaking, cutoff):
                 max_capped = True
                 break
             
-            # Get star atom
+            # Get star atom from pattern
             query_star_idx = [i for i, atom in enumerate(match_mol.GetAtoms()) if atom.GetAtomicNum() == 0][0]
-            target_star_idx = match[query_star_idx]
-            target_star_atom = clean_mol.GetAtomWithIdx(target_star_idx)
-            atom_to_keep = target_star_idx
+            idx_to_keep = match[query_star_idx]
+            rdkit_atom_to_keep = clean_mol.GetAtomWithIdx(idx_to_keep)
 
-            ase_idx = rdkit_to_ase[atom_to_keep]
-            connecting_pos = new_atoms[ase_idx].position
-            atom_to_keep_pos = connecting_pos.copy()
+            ase_idx_to_keep = rdkit_to_ase[idx_to_keep]
+            pos_to_keep = new_atoms[ase_idx_to_keep].position
 
-            if target_star_atom.GetAtomicNum() == 1: # only one repeat unit
+            if rdkit_atom_to_keep.GetAtomicNum() == 1: # only one repeat unit
                 # print("STOP: whole chain will be deleted")
                 new_atoms = delete_from_ase(new_atoms, match)
                 clean_mol = delete_from_rdkit(clean_mol, match)
@@ -151,38 +153,47 @@ def trim_structure(chain, structure, bonds_breaking, cutoff):
                 break
 
             # Get position of neighbor attached to star atom
-            heavy_neighbors = [ neighbor for neighbor in target_star_atom.GetNeighbors()
-                if neighbor.GetAtomicNum() > 1  and neighbor.GetIdx() in match # exclude H (atomic number 1)
+            heavy_neighbors = [ neighbor for neighbor in rdkit_atom_to_keep.GetNeighbors()
+                if neighbor.GetAtomicNum() > 1  and neighbor.GetIdx() in match
             ]
-            atom_for_pos = heavy_neighbors[0].GetIdx()
-            ase_idx_for_pos = rdkit_to_ase[atom_for_pos]
-            old_position = new_atoms[ase_idx_for_pos].position
+            idx_for_pos = heavy_neighbors[0].GetIdx()
+            ase_idx_for_pos = rdkit_to_ase[idx_for_pos]
+            old_pos = new_atoms[ase_idx_for_pos].position
 
-            direction = old_position - connecting_pos
+            direction = old_pos - pos_to_keep
             direction /= np.linalg.norm(direction)
 
+            # add solvent matches for removal
+            extra_to_delete = []
+            for extra in chain.extra_rdkit_mol:
+                extra = remove_bond_order(extra)
+                extra_matches = clean_mol.GetSubstructMatches(extra)
+                for extra_match in extra_matches:
+                    if any(idx in stop_indices for idx in extra_match):
+                        continue
+                    extra_to_delete += extra_match
+
             # Do not delete the atom to keep
-            remove_from_match = list(match)
-            remove_from_match.remove(atom_to_keep)
+            remove_from_match = list(match) + extra_to_delete
+            remove_from_match.remove(idx_to_keep)
             tuple(remove_from_match)
             
             # Add H then delete others ASE 
             old_Z = new_atoms[ase_idx_for_pos].number
-            bond_length = covalent_radii[old_Z] + covalent_radii[1]
-            new_pos = connecting_pos + direction * bond_length
-            # print("removed:", len(remove_from_match))
+            new_bond_length = covalent_radii[old_Z] + covalent_radii[1]
+            new_pos = pos_to_keep + direction * new_bond_length
 
             new_atoms += Atom('H', position=new_pos) 
 
             new_atoms = delete_from_ase(new_atoms, remove_from_match)
             ase_positions = np.array([atom.position for atom in new_atoms])
     
-            distances = np.linalg.norm(ase_positions - atom_to_keep_pos, axis=1)
-            new_atom_to_keep = int(np.argmin(distances))
+            distances = np.linalg.norm(ase_positions - pos_to_keep, axis=1)
+            new_atom_ase_idx = int(np.argmin(distances)) # get new_ase_index
 
             # Add H then delete others RDkit 
-            clean_mol = add_to_rdkit(clean_mol, ase_to_rdkit, new_atom_to_keep)
-            current_idx = ase_to_rdkit[atom_to_keep]
+            clean_mol = add_to_rdkit(clean_mol, ase_to_rdkit, new_atom_ase_idx)
+            current_idx = ase_to_rdkit[idx_to_keep]
             clean_mol = delete_from_rdkit(clean_mol, remove_from_match)
 
             rdkit_to_ase, ase_to_rdkit = reset_maps(new_atoms, clean_mol)
