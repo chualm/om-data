@@ -530,8 +530,21 @@ def surround_chain_with_extra(chain, bond=None, remove=False, max_atoms=250):
     if remove:
         flat_extra_list = list(match for matches in extra_list for match in matches)
         flat_extra_list = sorted(flat_extra_list, reverse=True)
+        near_chain_list = []
+        for idx in chain_list:
+            near_chain_list += get_shielded_zone(ase_atoms, idx, cutoff=3.0)
+        sorted_near_chain = sort_by_bond_distance(ase_atoms, bond, near_chain_list)
+        flat_extra_list = list(set(flat_extra_list) - set(sorted_near_chain))
         sorted_solvent = sort_by_bond_distance(ase_atoms, bond, flat_extra_list)
+
         keep_set = set(chain_list)
+        for idx in sorted_near_chain:
+            if len(keep_set) >= max_atoms:
+                break
+            matching_groups = [group for group in extra_list if idx in group]
+
+            for group in matching_groups:
+                keep_set.update(group)
         for idx in sorted_solvent:
             if len(keep_set) >= max_atoms:
                 break
@@ -539,8 +552,8 @@ def surround_chain_with_extra(chain, bond=None, remove=False, max_atoms=250):
 
             for group in matching_groups:
                 keep_set.update(group)
+
         kept_indices = sorted(keep_set)
-        print(len(kept_indices))
         ase_atoms = ase_atoms[kept_indices]
     
     return Chain(ase_atoms, chain.repeat_units, extra_smiles=chain.extra_units)
