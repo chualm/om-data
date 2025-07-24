@@ -543,20 +543,11 @@ def surround_chain_with_extra(chain, bond=None, remove=False, max_atoms=250):
         flat_extra_list = sorted(flat_extra_list, reverse=True)
         near_chain_list = []
         for idx in chain_list:
-            near_chain_list += get_shielded_zone(ase_atoms, idx, cutoff=3.0)
+            near_chain_list += get_shielded_zone(ase_atoms, idx, cutoff=5.0)
         sorted_near_chain = sort_by_bond_distance(ase_atoms, bond, near_chain_list)
-        flat_extra_list = list(set(flat_extra_list) - set(sorted_near_chain))
-        sorted_solvent = sort_by_bond_distance(ase_atoms, bond, flat_extra_list)
 
         keep_set = set(chain_list)
         for idx in sorted_near_chain:
-            if len(keep_set) >= max_atoms:
-                break
-            matching_groups = [group for group in extra_list if idx in group]
-
-            for group in matching_groups:
-                keep_set.update(group)
-        for idx in sorted_solvent:
             if len(keep_set) >= max_atoms:
                 break
             matching_groups = [group for group in extra_list if idx in group]
