@@ -111,7 +111,7 @@ class Chain(Molecule):
                 mapping = match_mol.GetSubstructMatch(kekul)
                 for m in match:
                     target_idx = m[mapping[idx]]
-                    ends.append(target_idx)
+                    if target_idx not in ends: ends.append(target_idx)
 
         # define end to end distance if a single chain
         if len(h_end_indices) == 2:
@@ -309,8 +309,12 @@ def get_bonds_to_break(chain, max_H_bonds=1, max_other_bonds=4, center_radius=5.
         
     h_bonds = []
     other_bonds = []
+    all_bonds = []
     for bond in mol.GetBonds():
         a1, a2 = bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()
+        if a1 not in chain.ends or a2 not in chain.ends:
+            all_bonds.append((a1, a2))
+
         if not (within_radius(a1) or within_radius(a2)):
             continue
 
@@ -355,7 +359,11 @@ def get_bonds_to_break(chain, max_H_bonds=1, max_other_bonds=4, center_radius=5.
         selected_other = non_ring_bonds[:max_non_ring] + ring_bonds[:max_ring]
 
     selected_other = [b[1] for b in selected_other]
+    bonds_selected = selected_h + selected_other
+
+    if not bonds_selected:
+        bonds_selected = random.sample(all_bonds, 5)
     
-    return selected_h + selected_other
+    return bonds_selected
 
 
