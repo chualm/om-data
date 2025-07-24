@@ -344,10 +344,10 @@ def add_h_to_chain(chain, bonds_reacting):
 
     # first atom listed in reactants needs to be the one that's protonated in products
     smarts_dict = {"reactants": ["[#7D3]","[#7H2]","[#7H1]",
-                                 "[#8D1]", "[#8H1]", "[#6;R0]=[#6;R0]", # avoid hydrogenation of aromatic rings
+                                 "[#8D1]", "[#8][#1]", "[#6;R0]=[#6;R0]", # avoid hydrogenation of aromatic rings
                                  "[#7]#[#6]", "[#7D2]=[#6]"],
                    "products": ["[#7D3;+1][#1]","[#7H2;+1][#1]","[#7H1;+1][#1]", 
-                                "[#8D1;+1][#1]", "[#8H1;+1][#1]", "[#6;+1]([#1])[#6]",
+                                "[#8D1;+1][#1]", "[#8;+1]([#1])[#1]", "[#6;+1]([#1])[#6]",
                                 "[#7;+1]([#1])#[#6]", "[#7D2;+1]([#1])=[#6]"]}
     reacting_region = []
     for idx in bonds_reacting:
