@@ -4,7 +4,7 @@ import random
 import numpy as np
 
 from architector.io_molecule import Molecule
-from rdkit.Chem import MolFromSmiles, AddHs, RWMol, Mol, BondType, Kekulize
+from rdkit.Chem import MolFromSmiles, AddHs, RWMol, Mol, BondType, Kekulize, GetMolFrags
 from rdkit.Chem import MolFromMolBlock, MolToXYZBlock, AdjustQueryParameters, AdjustQueryProperties, ADJUST_IGNOREDUMMIES
 
 from ase import Atom
@@ -67,8 +67,11 @@ class Chain(Molecule):
 
         self.rdkit_mol = get_rdkit_mol(self.ase_atoms)
         self.extra_rdkit_mol = self.get_extra_rdkit_mol()
-        self.n_extra = self.get_nextra()
         
+        chain_list, _ = self.get_idx_lists()
+        self.repair_broken_chains(chain_list)
+
+        self.n_extra = self.get_nextra()
         self.ends, self.end_to_end = self.assign_chain_ends()
         self.n_repeats = self.get_nrepeats()
 
@@ -141,7 +144,7 @@ class Chain(Molecule):
         for extra in self.extra_rdkit_mol:
             extra_mol = extra
             extra_mol = remove_bond_order(extra)
-            matches = chain_mol.GetSubstructMatches(extra_mol)
+            matches = chain_mol.GetSubstructMatches(extra_mol, maxMatches=1000000)
             extra_atoms.update(matches)
 
         all_atoms = set(range(chain_mol.GetNumAtoms()))
@@ -195,7 +198,7 @@ class Chain(Molecule):
         chain_mol = remove_bond_order(self.rdkit_mol)
         for extra in self.extra_rdkit_mol:
             extra = remove_bond_order(extra)
-            matches = chain_mol.GetSubstructMatches(extra)
+            matches = chain_mol.GetSubstructMatches(extra, maxMatches=1000000)
             n_extra.append(len(matches))
         
         return n_extra
@@ -205,6 +208,32 @@ class Chain(Molecule):
         for extra in self.extra_units:
             rdkit_mols.append(AddHs(MolFromSmiles(extra)))
         return rdkit_mols
+    
+    def repair_broken_chains(self, chain_list):
+        from ase.geometry import find_mic
+        ase_atoms = self.ase_atoms
+        positions, cell = ase_atoms.get_positions(), ase_atoms.get_cell()
+        fragments = GetMolFrags(self.rdkit_mol, asMols=False, sanitizeFrags=False)
+        fragments = [fragment for fragment in fragments if any(atom in chain_list for atom in fragment)]
+        ref_pos = positions[list(fragments[0])]
+        ref_com = np.mean(ref_pos, axis=0)
+        for idx_group in fragments:
+            mol_pos = positions[list(idx_group)]
+            mol_com = np.mean(mol_pos, axis=0)
+
+            dr = mol_com - ref_com
+            dr_wrapped = find_mic(dr[np.newaxis, :], cell)[0]
+
+            dist_raw = np.linalg.norm(dr)
+            if dist_raw > 10.0:
+                translation = np.squeeze(dr_wrapped) - dr
+                for idx in idx_group:
+                    positions[idx] += translation
+
+        ase_atoms.set_positions(positions)
+
+        self.ase_atoms = ase_atoms
+        self.rdkit_mol = get_rdkit_mol(self.ase_atoms)
     
 def get_rdkit_mol(ase_atoms):
     
