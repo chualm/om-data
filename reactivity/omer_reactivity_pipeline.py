@@ -214,30 +214,30 @@ def omer_react_pipeline(chain_dict, output_path, csv_dir):
         print(os.path.join(output_path, name, f"afir_struct_{i}_charge_{charge}_uhf_{uhf}_natoms_{n_atoms}_bondbreak_{react_symbols}_modsmarts_{mod_num}_cutoff_{cutoff}.xyz"))
         write(os.path.join(output_path, name, f"afir_struc_{i}_charge_{charge}_uhf_{uhf}_natoms{n_atoms}_bondbreak_{react_symbols}_modsmarts_{mod_num}_cuttoff_{cutoff}.xyz"), atoms, format="xyz", comment=comment)
 
-def main(args):
+def main(all_chains_dir, csv_dir, output_path):
     pdb_files = []
-    for subdir, _, files in os.walk(args.all_chains_dir):
+    for subdir, _, files in os.walk(all_chains_dir):
         for filename in files:
             if filename.endswith(".pdb"):
                 pdb_path = os.path.join(subdir, filename)
                 pdb_files.append(pdb_path)
     
-    add_list, remove_list, none_list = get_splits_for_protonation(pdb_files, args.csv_dir, "logfile.txt")
+    add_list, remove_list, none_list = get_splits_for_protonation(pdb_files, csv_dir, "logfile.txt")
 
-    os.makedirs(os.path.join(args.output_path, 'none/'), exist_ok=True)
-    none_path = os.path.join(args.output_path, 'none/')
+    os.makedirs(os.path.join(output_path, 'none/'), exist_ok=True)
+    none_path = os.path.join(output_path, 'none/')
     for none_chain_dict in none_list:
-        omer_react_pipeline(none_chain_dict, none_path, args.csv_dir)
+        omer_react_pipeline(none_chain_dict, none_path, csv_dir)
     
-    os.makedirs(os.path.join(args.output_path, 'remove_H/'), exist_ok=True)
-    remove_path = os.path.join(args.output_path, 'remove_H/')
+    os.makedirs(os.path.join(output_path, 'remove_H/'), exist_ok=True)
+    remove_path = os.path.join(output_path, 'remove_H/')
     for remove_chain_dict in remove_list:
-        omer_react_pipeline(remove_chain_dict, remove_path, args.csv_dir)
+        omer_react_pipeline(remove_chain_dict, remove_path, csv_dir)
 
-    os.makedirs(os.path.join(args.output_path, 'add_H/'), exist_ok=True)
-    add_path = os.path.join(args.output_path, 'add_H/')
+    os.makedirs(os.path.join(output_path, 'add_H/'), exist_ok=True)
+    add_path = os.path.join(output_path, 'add_H/')
     for add_chain_dict in add_list:
-        omer_react_pipeline(add_chain_dict, add_path, args.csv_dir)
+        omer_react_pipeline(add_chain_dict, add_path, csv_dir)
 
 
 def parse_args():
@@ -249,4 +249,4 @@ def parse_args():
 
 if __name__ == "__main__":
     args = parse_args()
-    main(args)
+    main(args.all_chains_dir, args.csv_dir, args.output_path)
