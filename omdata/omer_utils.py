@@ -193,7 +193,7 @@ def trim_structure(chain, structure, bonds_breaking, cutoff):
 
             # Add H then delete others RDkit 
             clean_mol = add_to_rdkit(clean_mol, ase_to_rdkit, new_atom_ase_idx)
-            current_idx = ase_to_rdkit[idx_to_keep]
+            current_idx = rdkit_to_ase[idx_to_keep]
             clean_mol = delete_from_rdkit(clean_mol, remove_from_match)
 
             rdkit_to_ase, ase_to_rdkit = reset_maps(new_atoms, clean_mol)
@@ -202,28 +202,63 @@ def trim_structure(chain, structure, bonds_breaking, cutoff):
     return new_atoms
 
 def trim_structures(chain, unique_structures, bonds_breaking, max_atoms=250, delta_cutoff=0.2):
-    trimmed_strucutres = []
-    for structure in unique_structures:
-        cutoff = random.uniform(4.0, 6.0)
-        structure.arrays['residuenames'] = np.copy(chain.ase_atoms.arrays['residuenames'])
-        new_atoms = trim_structure(chain, structure, bonds_breaking, cutoff)
-        skip = False
-        while len(new_atoms) > max_atoms:
-            new_cutoff = cutoff - delta_cutoff
-            new_atoms = trim_structure(chain, structure, bonds_breaking, new_cutoff)
-            cutoff = new_cutoff
-            if cutoff < 0:
-                print("Error in cutoff")
-                skip = True
-                break
-        if skip:
-            continue
+    trimmed_structures = []
+    cutoff = random.uniform(4.0, 6.0)
 
+    last_structure = unique_structures[-1]
+    last_structure.arrays['residuenames'] = np.copy(chain.ase_atoms.arrays['residuenames'])
+
+    last_trimmed = trim_structure(chain, last_structure, bonds_breaking, cutoff)
+    while len(last_trimmed) > max_atoms:
+        new_cutoff = cutoff - delta_cutoff
+        last_trimmed = trim_structure(chain, last_structure, bonds_breaking, new_cutoff)
+        cutoff = new_cutoff
+        if cutoff < 0:
+            break
+
+    trimmed_pos = last_trimmed.get_positions()
+    original_pos = last_structure.get_positions()
+
+    original_set = set(map(tuple, original_pos))
+    trimmed_set = set(map(tuple, trimmed_pos))
+
+    deleted_pos = original_set - trimmed_set
+    added_pos = trimmed_set - original_set
+
+    deleted_indices = [i for i, pos in enumerate(original_pos) if tuple(pos) in deleted_pos]
+    added_indices = [i for i, pos in enumerate(trimmed_pos) if tuple(pos) in added_pos]
+
+    added_H_info = [] # bring back H caps
+    for i in added_indices:
+        if last_trimmed[i].symbol != 'H':
+            continue  
+
+        pos_H = last_trimmed[i].position
+        dists = np.linalg.norm(trimmed_pos - pos_H, axis=1)
+        nearest_idx = np.argmin([
+            d if last_trimmed[j].symbol != 'H' else np.inf
+            for j, d in enumerate(dists)])
+        
+        nearest_atom = last_trimmed[nearest_idx]
+        offset = pos_H - nearest_atom.position
+        added_H_info.append((nearest_idx, offset))
+
+    for i in range(len(unique_structures) - 1):
+        structure = unique_structures[i]
+        structure.arrays['residuenames'] = np.copy(chain.ase_atoms.arrays['residuenames'])
+        new_atoms = delete_from_ase(structure, deleted_indices)
+        for idx, offset in added_H_info:
+            num_deleted_before = sum(1 for i in deleted_indices if i < idx)
+            shifted_idx = idx - num_deleted_before
+            pos = new_atoms[shifted_idx].position + offset
+            new_atoms.append(Atom('H', position=pos))
 
         new_atoms.info['trim_cutoff'] = cutoff
-        trimmed_strucutres.append(new_atoms)
-
-    return trimmed_strucutres
+        trimmed_structures.append(new_atoms)
+        assert len(new_atoms) == len(last_trimmed)
+    
+    trimmed_structures.append(last_trimmed)
+    return trimmed_structures
 
 def get_bonds(rdkit_mol):
     bonds = set()
