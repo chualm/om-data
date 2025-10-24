@@ -1,25 +1,22 @@
 #!/bin/bash
-#SBATCH --job-name=conformer
-#SBATCH --output=conformer_%A_%a.out
+#SBATCH --job-name=eval_conf
+#SBATCH --output=generate_%a.out
 #SBATCH --constraint=gpu
 #SBATCH --gpus=1
 #SBATCH --cpus-per-task=32 
-#SBATCH --mem=32G
-#SBATCH --time=24:00:00  
-
-#SBATCH --array=0-999
+#SBATCH --mem=32G  
+#SBATCH --time=05:00:00
+#SBATCH --array=0-3
 
 idx=$((${SLURM_ARRAY_TASK_ID}+0))
 
 source ~/.bashrc
 
-mamba activate loqi
-export PYTHONPATH="./src:$PYTHONPATH"
+mamba activate loqi-omer
+export PYTHONPATH="$PATH_TO_LOQI:$PYTHONPATH"
 
-python conformer_eval.py --smiles_bank "traditional_charges.csv" \
-                         --smiles_dir "$HOME/OPEN_25/om-data/omer-files/" \
-                         --working_dir "$HOME/OPEN_25/omer/EVALS/output/" \
-                         --loqi_path "$SCRATCH/LoQI/" \
-                         --n_chunks 1000 \
-                         --chunk_idx $idx \
-                         --n_samples 5 
+python ./conformer_eval.py --make_conformers true \
+                         --working_dir "$PATH_TO_WORKING_DIR" \
+                         --loqi_path "$PATH_TO_LOQI" \
+                         --n_chunks 4 \
+                         --chunk_idx $idx
