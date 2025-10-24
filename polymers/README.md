@@ -55,6 +55,8 @@ sbatch generate_smiles.sh
 ```
 `all_smiles.csv` contains all the generated SMILES that are branched conformers with at least 3 branching points. `info_all_smiles.csv` contains information regarding the inchikey corresponding to the SMILES as well as the monomer repeat units that make up the sample, whether it is a copolymer, and whether it is charged. Default settings generate 1500 samples, where roughly 50% are copolymers with up to 5 repeat units and 25% have 4 or less charged atoms. 
 
+This distribution is dependent on using `traditional_charges.csv`, which has the first 100 unchraged repeat units of `Traditional_polymers.csv`, as well as all 9 charged units from the list and an additional 53 which have not been seen in the initial dataset. 
+
 ### Second step: Run LoQI to generate conformers then keep 10 of the best
 ``` bash
 sbatch run_conformers.sh
