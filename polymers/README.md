@@ -47,7 +47,7 @@ data:
 ```
 
 ## Step 4: Run the program
-Edit paths in `smiles.sh` and `conformers.sh` accordingly. Make an output directory, with subdirectories `xyzs/` and `sdfs/`
+Edit paths in `generate_smiles.sh` and `conformers.sh` accordingly. Make an output directory, with subdirectories `xyzs/` and `sdfs/`
 
 ### First step: Generate SMILES for branched polymers
 ``` bash
@@ -59,7 +59,7 @@ This distribution is dependent on using `traditional_charges.csv`, which has the
 
 ### Second step: Run LoQI to generate conformers then keep 10 of the best
 ``` bash
-sbatch run_conformers.sh
+sbatch conformers.sh
 ```
 In the working directory's `xyzs/` folder, the .xyz files will be generated. Summary information on whether a given SMILES succeeded in conformer generation is recorded in `info_all_confs_{chunk_idx}.csv`, along with the number of conformers saved.
 
