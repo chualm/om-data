@@ -14,4 +14,4 @@ python conformer_eval.py --generate_smiles_list true \
                     --smiles_bank "traditional_charges.csv" \
                     --smiles_dir "$PATH_TO_OM_DATA/omer-files/" \
                     --working_dir "$PATH_TO_WORKING_DIR" \
-                    --n_samples 1500
+                    --n_samples 2000

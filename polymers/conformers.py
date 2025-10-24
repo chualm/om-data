@@ -222,7 +222,7 @@ def relax_geom(geom, charge):
     if rmsd < 0.5:
         return atoms
     else:
-        raise Exception(f"Not successful: {rmsd} Angstroms")
+        raise IndexError(f"Not successful: {rmsd} Angstroms")
 
 """
 Helper functions
@@ -374,18 +374,21 @@ def main(smiles_bank, smiles_dir, working_dir, loqi_path,
             except IndexError:
                 sample_dict['success'] = False
                 sample_dict['n_conf'] = 0
+                alldicts.append(sample_dict)
                 with open(logfile, 'a') as file1:
                     file1.write(f"NO VALID CONFORMERS for {smiles}\n")
                 continue
 
             sample_dict['success'] = True
             sample_dict['n_conf'] = n
+            alldicts.append(sample_dict)
             with open(logfile, 'a') as file1:
                 file1.write(f"Saved {n} conformers for {smiles}\n")
             
             with open(log_success_smiles, 'a') as file:
                 file.write(f"{smiles}\n")
             success += 1
+            
         
         data = pd.DataFrame(alldicts)   
         data.to_csv(os.path.join(working_dir, f"info_all_confs_{chunk_idx}.csv")) 
