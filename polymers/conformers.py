@@ -276,8 +276,8 @@ def has_right_connectivity(conf, og_mol):
     s1 = Chem.MolToSmiles(og_mol, isomericSmiles=False)
     s2 = Chem.MolToSmiles(conf_mol, isomericSmiles=False)
     if not s1 == s2:
-        mol1 = remove_charge(remove_bond_orders(mol1))
-        mol2 = remove_charge(remove_bond_orders(mol2))
+        mol1 = remove_charge(remove_bond_orders(og_mol))
+        mol2 = remove_charge(remove_bond_orders(conf_mol))
 
         s1 = Chem.MolToSmiles(mol1, isomericSmiles=False)
         s2 = Chem.MolToSmiles(mol2, isomericSmiles=False)
